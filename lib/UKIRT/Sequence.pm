@@ -451,6 +451,16 @@ sub setTarget {
   croak "setTarget not yet implemented.";
 }
 
+=item B<clearTarget>
+
+Clear target information associated with this sequence.
+
+=cut
+
+sub clearTarget {
+  croak "clearTarget not yet implemented.";
+}
+
 =item B<getGuide>
 
 Go through the exec and retrieve the guide star information.
