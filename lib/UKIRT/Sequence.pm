@@ -870,7 +870,7 @@ Return a one-line summary of the Sequence.
 
 Current format:
 
-  TargetName Filters
+  Instrument TargetName Filters Camera/Disperser
 
 =cut
 
@@ -902,12 +902,11 @@ sub summary {
   # For UIST we should say 'imaging' or
 
   # Get the content
-  my $s = sprintf("%-12s %-12s %s %-12s %-12s", 
+  my $s = sprintf("%-10s %-15s %-12s %-15s", 
 		  $self->getInstrument,
-		  $self->getTargetName,
-		  $guide,
+		  substr($self->getTargetName,0,15),
 		  scalar($self->getWaveBand),
-		  $mode
+		  substr($mode,0,15)
 		 );
   return $s;
 }
