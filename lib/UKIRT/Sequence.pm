@@ -645,7 +645,7 @@ sub getCameraMode {
   my $inst = $self->getInstrument;
 
   my @cam;
-  if ($inst eq 'UFTI') {
+  if ($inst eq 'UFTI' || $inst eq 'WFCAM') {
     push(@cam,'imaging');
   } elsif ($inst eq 'CGS4') {
     push(@cam,'spectroscopy');
@@ -681,7 +681,7 @@ sub getWaveBand {
   # getConfigItem method to obtain the values.
 
   my ($key, $type);
-  if ($inst eq 'UFTI') {
+  if ($inst eq 'UFTI' || $inst eq 'WFCAM') {
     $key = 'filter';
     $type = 'Filter';
   } elsif ($inst eq 'UIST' || $inst eq 'MICHELLE') {
@@ -886,7 +886,7 @@ sub summary {
   if ($inst eq 'CGS4') {
     # For CGS4 we need the grating
     $mode = join("/",$self->_remove_dups( $self->getConfigItem( 'grating' )));
-  } elsif ($inst eq 'UFTI') {
+  } elsif ($inst eq 'UFTI' || $inst eq 'WFCAM') {
     $mode = 'imaging';
   } elsif ($inst eq 'UIST' || $inst eq 'MICHELLE') {
     my @cam = $self->getCameraMode;

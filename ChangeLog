@@ -1,3 +1,7 @@
+2004-09-13  Tim Jenness  <tjenness@cpan.org>
+
+	* Sequence.pm: Add WFCAM 
+
 2004-01-21  Tim Jenness  <timj@jach.hawaii.edu>
 
 	* Sequence.pm (readconfig): Now support the use of a ../configs
