@@ -9,6 +9,7 @@ UKIRT::Sequence - Parse and manipulate a UKIRT sequence
   use UKIRT::Sequence;
 
   my $seq = new UKIRT::Sequence;
+  $seq->readseq( $file );
   $target = $seq->getTarget;
   $seq->setTarget( $coords );
   $text = $seq->summary();
@@ -222,6 +223,16 @@ Given a config name, read it in and convert it to a hash.
 
   %config = $seq->readconfig( $configfile );
 
+The config file can be called without a suffix; with .conf or
+.aim added automatically. Additionally, if the file can not be
+found, a check is made for a lower case version of the file (with
+all suffix combinations). An exception is thrown if no file can be
+found.
+
+Note that this routine does not attempt to determine the suffix
+and case-sensitvity from the instrument name since it is possible
+that the config is being read without knowing the instrument.
+
 Note that this assumes the config is found in the current directory
 since (it seems) UKIRT sequences do not specify a full path but assume
 the same directory as that containing the exec.
@@ -235,19 +246,65 @@ sub readconfig {
   my $self = shift;
   my $file = shift;
 
-  $file .= ".conf" unless $file =~ /\.conf$/;
+  # CGS4 configs have .aim suffix whereas other UKIRT sequences
+  # have a .conf suffix. We therefore have to try both combinations
+  # plus the variation where the file is fully specified.
+  # Since CGS4 uses lower case for its .aim files (since they must
+  # be visible on a vax) we also try doing a lc() as last resort.
+  # Use -e rather than open() to test existence since it is not likely
+  # that we will encounter a race condition
+  # All three suffices
+  my $found;
+  for my $suffix ('','.conf','.aim') {
+    my $f = $file . $suffix;
+    if (-e $f) {
+      $found = $f;
+      last;
+    }
+    # lower case
+    if (-e lc($f)) {
+      $found = lc($f);
+      last;
+    }
+  }
 
-  open my $fh, "< $file" or croak "Error reading config $file: $!";
+  croak "Unable to locate config file with root name $file"
+    unless defined $found;
+
+  open my $fh, "< $found" or croak "Error reading config $found: $!";
   my @lines = <$fh>;
   close($fh) or croak "Error closing config $file: $!";
 
+  # We need to be able to extract information from both a ORAC .conf
+  # file and an AIM .aim file (e.g. for CGS4) Note that the AIM format
+  # can not be written out since the object representation of using a
+  # hash is not sufficient (and if we want to write we should be using
+  # a UKIRT::Sequence::Config::AIM and UKIRT::Sequence::Config::ORAC
+  # subclasses)
   my %conf;
-  for my $line (@lines) {
-    # split into 2 parts / dropping the =
-    chomp $line;
-    my ($key, undef, $value) = split /\s+/,$line, 3;
+  if ($found =~ /\.conf$/) {
+    for my $line (@lines) {
+      # split into 2 parts / dropping the =
+      chomp $line;
+      my ($key, undef, $value) = split /\s+/,$line, 3;
 
-    $conf{$key} = $value;
+      $conf{$key} = $value;
+    }
+  } elsif ($found =~ /\.aim$/) {
+    # simple parser
+    for my $line (@lines) {
+      # skip anything that has a colon in it
+      next if $line =~ /:/;
+      # remove leading and trailing space
+      $line =~ s/^\s+//;
+      $line =~ s/\s+$//;
+      next unless length($line);
+      # split into two chunks (keys will include spaces)
+      my ($value, $key) = split /\s+/,$line, 2;
+      $conf{$key} = $value;
+    }
+  } else {
+    croak "Unrecognized file suffix. Neither .aim nor .conf in '$found'";
   }
 
   return %conf;
@@ -321,6 +378,40 @@ sub getTarget {
   my $target;
   for my $line (@exec) {
     if ($line =~ /^SET_TARGET/) {
+      my @content = split /\s+/, $line;
+      $target = new Astro::Coords(
+				  name => $content[1],
+				  type => $content[2],
+				  ra => $content[3],
+				  dec => $content[4],
+				  units => 's',
+				 );
+      last;
+    }
+  }
+
+  return $target;
+}
+
+=item B<getGuide>
+
+Go through the exec and retrieve the guide star information.
+Returned as an C<Astro::Coords> object.
+
+  $c = $seq->getGuide();
+
+Returns C<undef> if no guide star can be found.
+
+=cut
+
+sub getGuide {
+  my $self = shift;
+  my @exec = $self->exec;
+
+  # Duplicate code from getTarget. Very naughty.
+  my $target;
+  for my $line (@exec) {
+    if ($line =~ /^SET_GUIDE/) {
       my @content = split /\s+/, $line;
       $target = new Astro::Coords(
 				  name => $content[1],
@@ -421,6 +512,26 @@ sub getTargetName {
   }
 }
 
+=item B<getGuideName>
+
+Return the name of the guide star.
+
+  $target = $seq->getTargetName;
+
+Returns C<undef> if no guide star is specified.
+
+=cut
+
+sub getGuideName {
+  my $self = shift;
+  my $c = $self->getGuide;
+  if (defined $c) {
+    return $c->name;
+  } else {
+    return undef;
+  }
+}
+
 =item B<getWaveBand>
 
 Return a list of C<Astro::WaveBand> objects associated with the sequence.
@@ -486,7 +597,7 @@ sub getWaveBand {
 
   } elsif ($inst eq 'CGS4') {
     $type = 'Wavelength';
-    $key = 'centralWavelength';
+    $key = 'wavelength';
   } else {
     croak "Unknown instrument '$inst'";
   }
@@ -499,6 +610,7 @@ sub getWaveBand {
   my $current = '';
   my @uniq;
   for my $w (@vals) {
+    next unless defined $w;
     next if $current eq $w;
     push(@uniq, $w);
     $current = $w;
@@ -600,8 +712,9 @@ sub summary {
   my $self = shift;
 
   # Get the content
-  my $s = sprintf("%-12s %-12s", 
-		  $self->getTargetName, 
+  my $s = sprintf("%-12s [G*=%-12s] %-12s", 
+		  $self->getTargetName,
+		  $self->getGuideName,
 		  scalar($self->getWaveBand));
   return $s;
 }
