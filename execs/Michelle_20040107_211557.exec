@@ -1,0 +1,52 @@
+define_inst Michelle 2.10 -10.45 0.0 21.0
+-set_inst Michelle
+setHeader STANDARD T
+SET_TARGET BS74 J2000 00:19:25.674 -08:49:26.12 0.0 0.0
+-system J2000 ALL
+do 1 _slew_all
+-CHOP ChopOff
+SET_CHOPTHROW 16.01
+SET_CHOPPA 0.0
+-DEFINE_BEAMS 0.0 16.01
+-CHOP ChopOn
+-CHOP_EXTERNAL
+loadConfig Michelle_20040107_211557_1
+setrotator 0.0
+startGroup
+SET_CHOPBEAM A
+-setHeader RMTAGENT none
+-setHeader AGENTID none
+-setHeader NOFFSETS 4
+setHeader GRPMEM T
+setHeader RECIPE STANDARD_STAR
+set OBJECT
+break
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+offset 0.0 -7.98
+-WAIT ALL
+do 1 _observe
+offset 0.0 -7.98
+-WAIT ALL
+do 1 _observe
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+breakPoint
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+offset 0.0 -7.98
+-WAIT ALL
+do 1 _observe
+offset 0.0 -7.98
+-WAIT ALL
+do 1 _observe
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+breakPoint
+-CHOP ChopOff
+SET_CHOPBEAM MIDDLE
+-ready

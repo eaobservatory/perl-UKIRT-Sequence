@@ -1,0 +1,53 @@
+define_inst UFTI -4.1 1.86 0.0 2.150
+-set_inst UFTI
+setHeader STANDARD F
+telConfig UFTI_20040109_142912935.xml Object Name
+-system J2000 ALL
+do 1 _slew_all
+loadConfig UFTI_20040109_142912935_1
+startGroup
+-setHeader RMTAGENT none
+-setHeader AGENTID none
+-setHeader NOFFSETS 10
+setHeader GRPMEM F
+setHeader RECIPE REDUCE_DARK
+set DARK
+do 1 _observe
+setHeader GRPMEM T
+setHeader RECIPE JITTER_SELF_FLAT
+loadConfig UFTI_20040109_142912935_1
+set OBJECT
+break
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+offset 20.0 1.0
+-WAIT ALL
+do 1 _observe
+offset 21.0 20.0
+-WAIT ALL
+do 1 _observe
+offset 1.0 21.0
+-WAIT ALL
+do 1 _observe
+offset -20.0 22.0
+-WAIT ALL
+do 1 _observe
+offset -21.0 2.0
+-WAIT ALL
+do 1 _observe
+offset -22.0 -20.0
+-WAIT ALL
+do 1 _observe
+offset 2.0 -21.0
+-WAIT ALL
+do 1 _observe
+offset 22.0 -22.0
+-WAIT ALL
+do 1 _observe
+breakPoint
+offset 0.0 0.0
+-WAIT ALL
+breakPoint
+set DARK
+-ready

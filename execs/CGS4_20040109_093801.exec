@@ -1,0 +1,47 @@
+define_inst CGS4 -12.24 -5.1 0.0 2.2
+-set_inst CGS4
+setHeader STANDARD T
+SET_TARGET BS9088 J2000 0:2:10.1 27:4:56 0.0 0.0
+-system J2000 ALL
+do 1 _slew_all
+SET_GUIDE unknown J2000 0:2:10.1 27:4:56 0.0 0.0
+-system J2000 GUIDE
+do 1 _slew_guide
+GUIDE ON
+loadConfig CGS4_20040109_093801_1
+setrotator 0.0
+startGroup
+-setHeader RMTAGENT none
+-setHeader AGENTID none
+-setHeader NOFFSETS 4
+setHeader GRPMEM T
+setHeader RECIPE STANDARD_STAR
+set OBJECT
+break
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+offset 0.0 11.74
+-WAIT ALL
+do 1 _observe
+offset 0.0 11.74
+-WAIT ALL
+do 1 _observe
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+breakPoint
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+offset 0.0 11.74
+-WAIT ALL
+do 1 _observe
+offset 0.0 11.74
+-WAIT ALL
+do 1 _observe
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+breakPoint
+-ready

@@ -1,0 +1,41 @@
+ ASTRONOMICAL     configuration : CGS4_20040109_093801_1                  : 2.1                                                      
+ Basic (object) configuration: 
+ ND_STARE             acquisition configuration                                     
+     2.0000           exposure time                                       
+      3               exposures/integ                                   
+      1               scans                                   
+      4               sampling                                   
+ 2_pixels             sample range                                     
+     0.0000           position angle                                       
+ B2                   filter                               
+ 1_pixel              slit width                                    
+ 40_lpmm              grating                                    
+     2.2000           wavelength                                       
+ 1                    order                              
+ 0.0                  cvf offset                                
+ off                  calibration lamp                                
+ 97                   tungsten-halogen level                               
+ 10                   Lamp effective aperture                               
+ Flat configuration variant (from object): 
+ 1x1                  Flat sampling                                
+ 1.3                  calibration lamp                                
+ B2                   filter                               
+ ND_STARE             acquisition configuration                                     
+     0.2000           flat exposure time                                       
+     30               flat exposures/integ                                   
+      1               flat integrations                                   
+ Dark configuration variant (from object): 
+      1               dark exposure/integ                                   
+      1               dark integrations                                   
+ Bias configuration variant (from object): 
+     0.1200           bias exposure time                                       
+    100               bias exposures/integ                                   
+      3               bias integrations                                   
+ Arc configuration variant (from object): 
+ argon                calibration lamp                                  
+ Blanks               filter                                   
+ 2.2                  cvf wavelength                                
+ STARE                acquisition configuration                                  
+     0.1200           arc exposure time                                       
+    100               arc exposures/integ                                   
+      1               arc integrations                                   

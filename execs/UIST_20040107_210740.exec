@@ -1,0 +1,47 @@
+define_inst UIST -4.08 -3.33 0.00 2.00
+-set_inst UIST
+setHeader STANDARD T
+SET_TARGET FS101 J2000 0:13:43.58 30:37:59.9 0.0 0.0
+-system J2000 ALL
+do 1 _slew_all
+SET_GUIDE FS101 J2000 0:13:43.58 30:37:59.9 0.0 0.0
+-system J2000 GUIDE
+do 1 _slew_guide
+GUIDE ON
+-WAIT ALL
+loadConfig UIST_20040107_210740_1
+setrotator 0.0
+startGroup
+-setHeader RMTAGENT none
+-setHeader AGENTID none
+-setHeader NOFFSETS 6
+setHeader GRPMEM F
+setHeader RECIPE REDUCE_DARK
+set DARK
+do 1 _observe
+setHeader GRPMEM T
+setHeader RECIPE BRIGHT_POINT_SOURCE_APHOT
+loadConfig UIST_20040107_210740_1
+set OBJECT
+break
+offset 0.0 0.0
+-WAIT ALL
+do 1 _observe
+offset -10.0 10.0
+-WAIT ALL
+do 1 _observe
+offset -10.0 -10.0
+-WAIT ALL
+do 1 _observe
+offset 10.0 -10.0
+-WAIT ALL
+do 1 _observe
+offset 10.0 10.0
+-WAIT ALL
+do 1 _observe
+breakPoint
+offset 0.0 0.0
+-WAIT ALL
+breakPoint
+set DARK
+-ready

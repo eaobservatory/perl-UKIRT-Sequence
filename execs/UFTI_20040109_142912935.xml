@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<OCS_CONFIG>
+  <TCS_CONFIG>
+    <BASE TYPE="Base">
+      <target>
+        <targetName>Object Name</targetName>
+        <spherSystem SYSTEM="J2000">
+          <c1>0:00:00</c1>
+          <c2>0:00:00</c2>
+        </spherSystem>
+      </target>
+    </BASE>
+  </TCS_CONFIG>
+</OCS_CONFIG>
