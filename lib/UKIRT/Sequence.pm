@@ -805,9 +805,23 @@ sub getCoords {
       my @content = split /\s+/, $line;
       my $file = $content[1];
 
-      $file = $self->_prepend_dir( $file );
+      # File will either be in the same directory as exec or in
+      # ../configs directory
+      my $xmlfile = $self->_prepend_dir( $file );
 
-      my $tcs = new TOML::TCS( File => $file );
+      # Hmm. If it does not exist, AND no path was supplied
+      # with the filename, try looking in ../configs directory
+      if (!-e $xmlfile && $xmlfile ne $file) {
+	$xmlfile = $self->_prepend_dir( $file,
+					File::Spec->catdir( File::Spec->updir,
+							    "configs")
+				      );
+      }
+
+      croak "Unable to locate TCS XML config file $file\n"
+	unless -e $xmlfile;
+
+      my $tcs = new TOML::TCS( File => $xmlfile );
 
       # Get the target information associated with this tag
       $target = $tcs->getCoords( $tag );
