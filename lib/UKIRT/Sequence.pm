@@ -390,7 +390,7 @@ sub getTargetName {
 =item B<getWaveBand>
 
 Return a list of C<Astro::WaveBand> objects associated with the sequence.
-Duplicates are ignored.
+Duplicates are ignored, but order is retained.
 
  @wb = $seq->getWaveband;
 
@@ -459,10 +459,24 @@ sub getWaveBand {
   # remove duplicates regardless of order
   my %dup = map { (defined $_ ? ($_, '') : () ) } @vals;
 
+  # Attempt to retain order
+  # go through the original list, if an item exists in %dup, push it
+  # onto the @uniq array and remove it from %dup. Continue until the
+  # end when %dup should be empty.
+  my @uniq;
+  for my $w (@vals) {
+    if (exists $dup{$w}) {
+      push(@uniq, $w);
+      delete $dup{$w};
+    }
+  }
+  croak "Error - dup hash should now be empty"
+    if values %dup;
+
   # Now create the objects
   my @wb = map { new Astro::WaveBand( Instrument => $inst,
 				      $type => $_
-				    ) } keys %dup;
+				    ) } @uniq;
 
   return (wantarray ? @wb : join("/",@wb));
 }
