@@ -1,5 +1,6 @@
 Makefile.PL
 Sequence.pm
+SequenceError.pm
 t/simple.t
 execs/CGS4_20040109_093801.exec
 execs/Michelle_20040107_210639.exec
