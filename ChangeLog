@@ -1,3 +1,8 @@
+2004-01-21  Tim Jenness  <timj@jach.hawaii.edu>
+
+	* Sequence.pm (readconfig): Now support the use of a ../configs
+	directory for configs (just like at UKIRT!)
+
 2004-01-20  Tim Jenness  <timj@jach.hawaii.edu>
 
 	* Sequence.pm (summary): Add instrument name to summary

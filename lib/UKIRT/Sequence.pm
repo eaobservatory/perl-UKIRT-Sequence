@@ -272,10 +272,13 @@ Note that this routine does not attempt to determine the suffix
 and case-sensitvity from the instrument name since it is possible
 that the config is being read without knowing the instrument.
 
-The assumption is that, if no path is specfied for the config file,
-that the config files are in the same directory as the exec. The
-directory is obtained via the C<inputfile> method (and automatically
-set when the exec is read).
+The config file can be in three locations. If the full path is specified
+to the config file, it is assumed that the file must be in that directory.
+If no path is specified (just the filename) the method will look in
+the same directory as the exec was located (this is what the observing
+tool does when it exports a sequence) or in the sibling C<configs>
+directory (this is what the translator does at the telescope).
+The exec directory is obtained from the C<inputfile> method.
 
 =cut
 
@@ -283,8 +286,26 @@ sub readconfig {
   my $self = shift;
   my $file = shift;
 
-  # need to find out whether the file includes a directory
-  $file = $self->_prepend_dir( $file );
+  # Config file is either in
+  #  - the same directory as the exec
+  #  - in the ../config directory relative to the location of the exec
+  #  - in the directory specified as part of the full file name
+  #    supplied to this method.
+
+  # list of directories to try
+  my @files;
+
+  # First prepend the inputdir as the first search location
+  # it will not be changed if it has a full directory path
+  push(@files, $self->_prepend_dir( $file ));
+
+  # if dir1 is the same as file we have a proper directory specification
+  # If they are different we also need to search in the ../configs directory
+  push( @files, $self->_prepend_dir( $file,
+				     File::Spec->catdir( File::Spec->updir,
+							 "configs")
+				   )
+      ) if $files[0] ne $file;
 
   # CGS4 configs have .aim suffix whereas other UKIRT sequences
   # have a .conf suffix. We therefore have to try both combinations
@@ -295,17 +316,17 @@ sub readconfig {
   # that we will encounter a race condition
   # All three suffices
   my $found;
-  for my $suffix ('','.conf','.aim') {
-    my $f = $file . $suffix;
-
-    if (-e $f) {
-      $found = $f;
-      last;
-    }
-    # lower case
-    if (-e lc($f)) {
-      $found = lc($f);
-      last;
+  PATHS: for my $path (@files) {
+    for my $suffix ('','.conf','.aim') {
+      if (-e $path.$suffix) {
+	$found = $path . $suffix;
+	last PATHS;
+      }
+      # lower case
+      if (-e $path. lc($suffix)) {
+	$found = $path.lc($suffix);
+	last PATHS;
+      }
     }
   }
 
@@ -841,11 +862,16 @@ directory, simply return it.
 
  $file = $seq->_prepend_dir( $file );
 
+An optional second argument can be supplied. This argument will
+be a directory name supplied as a relative path that should be
+appended to the global C<inputdir>
+
 =cut
 
 sub _prepend_dir {
   my $self = shift;
   my $file = shift;
+  my $newpath = shift;
 
   my ($vol, $dir, $base) = File::Spec->splitpath( $file );
 
@@ -853,6 +879,13 @@ sub _prepend_dir {
   if (!$dir && $base eq $file) {
     # Get the input directory and prepend it
     my $indir = $self->inputdir;
+
+    # Append the optional path adjustment
+    if (defined $newpath) {
+      $indir = File::Spec->catdir(File::Spec->splitdir($indir),
+				  File::Spec->splitdir($newpath));
+    }
+
     $file = File::Spec->catfile( $indir, $file);
   }
 
