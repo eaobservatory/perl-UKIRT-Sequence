@@ -1,0 +1,4 @@
+2004-01-19  Tim Jenness  <tjenness@cpan.org>
+
+	* Sequence.pm (getCoords): Add support for telConfig XML
+

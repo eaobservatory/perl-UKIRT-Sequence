@@ -7,6 +7,7 @@ WriteMakefile(
 	      'PREREQ_PM' => {
 			      'Astro::Coords' => 0.05,
 			      'Astro::WaveBand' => 0,
+		              'TOML::TCS' => 0,
 			     },
 	      ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
 	       (ABSTRACT_FROM => 'Sequence.pm',

@@ -30,6 +30,7 @@ our $VERSION = '0.01';
 
 use Astro::Coords;
 use Astro::WaveBand;
+use TOML::TCS;
 use File::Spec;
 
 # Overloading
@@ -274,7 +275,7 @@ that the config is being read without knowing the instrument.
 The assumption is that, if no path is specfied for the config file,
 that the config files are in the same directory as the exec. The
 directory is obtained via the C<inputfile> method (and automatically
-set when the exec is read). I
+set when the exec is read).
 
 =cut
 
@@ -283,15 +284,7 @@ sub readconfig {
   my $file = shift;
 
   # need to find out whether the file includes a directory
-  # specification
-  my ($vol, $dir, $base) = File::Spec->splitpath( $file );
-
-  # no directory, add one
-  if (!$dir && $base eq $file) {
-    # Get the input directory and prepend it
-    my $indir = $self->inputdir;
-    $file = File::Spec->catfile( $indir, $file);
-  }
+  $file = $self->_prepend_dir( $file );
 
   # CGS4 configs have .aim suffix whereas other UKIRT sequences
   # have a .conf suffix. We therefore have to try both combinations
@@ -410,7 +403,7 @@ sub _parse_lines {
 
 =item B<getTarget>
 
-Go through the exec and retrieve the target information.
+Go through the exec and retrieve the target information for the base position.
 Returned as an C<Astro::Coords> object.
 
   $c = $seq->getTarget();
@@ -421,24 +414,7 @@ Returns C<undef> if no target can be found.
 
 sub getTarget {
   my $self = shift;
-  my @exec = $self->exec;
-
-  my $target;
-  for my $line (@exec) {
-    if ($line =~ /^SET_TARGET/) {
-      my @content = split /\s+/, $line;
-      $target = new Astro::Coords(
-				  name => $content[1],
-				  type => $content[2],
-				  ra => $content[3],
-				  dec => $content[4],
-				  units => 's',
-				 );
-      last;
-    }
-  }
-
-  return $target;
+  return $self->getCoords( 'BASE' );
 }
 
 =item B<setTarget>
@@ -499,25 +475,7 @@ Returns C<undef> if no guide star can be found.
 
 sub getGuide {
   my $self = shift;
-  my @exec = $self->exec;
-
-  # Duplicate code from getTarget. Very naughty.
-  my $target;
-  for my $line (@exec) {
-    if ($line =~ /^SET_GUIDE/) {
-      my @content = split /\s+/, $line;
-      $target = new Astro::Coords(
-				  name => $content[1],
-				  type => $content[2],
-				  ra => $content[3],
-				  dec => $content[4],
-				  units => 's',
-				 );
-      last;
-    }
-  }
-
-  return $target;
+  return $self->getCoords( 'GUIDE' );
 }
 
 =item B<getProjectid>
@@ -752,7 +710,7 @@ from each config. There will be as many return elements as there are
 configs, even if the key does not exist in the configuration.
 
 The order of the entries in the array will match the order of the configs
-in the exec.
+in the exec
 
   @values = $seq->getConfigItem( $key );
 
@@ -765,6 +723,78 @@ sub getConfigItem {
 
   my @v = map { $configs{$_}->{$key} } $self->config_names;
   return @v;
+}
+
+=item B<getCoords>
+
+Retrieve the coordinate associated with the specified tag
+name (BASE, GUIDE or SKY).
+
+Assumes that the tag is specified in the TCS XML or, if a C<telConfig>
+instruction is not present, looks for a line of the form C<SET_$TAG>
+(although BASE maps to SET_TARGET not SET_BASE).
+
+  $coords = $seq->getCoords( 'SKY' );
+  $coords = $seq->getCoords( 'BASE' );
+  $coords = $seq->getCoords( 'GUIDE' );
+
+The C<getTarget> and C<getGuide> methods are simple wrappers about this
+routine.
+
+=cut
+
+sub getCoords {
+  my $self = shift;
+  my $tag = shift;
+  $tag = uc($tag);
+
+  # retrieve the exec
+  my @exec = $self->exec;
+
+  # Probably should cache this somewhere since it is not going to change
+  my $target;
+
+  # Go through the exec looking for a telConfig
+  # This should generate a hit for all modern sequences
+  my $foundConfig;
+  for my $line (@exec) {
+    if ($line =~ /telConfig/) {
+      $foundConfig = 1;
+      my @content = split /\s+/, $line;
+      my $file = $content[1];
+
+      $file = $self->_prepend_dir( $file );
+
+      my $tcs = new TOML::TCS( File => $file );
+
+      # Get the target information associated with this tag
+      $target = $tcs->getCoords( $tag );
+
+      # Abort from the search
+      last;
+    }
+  }
+
+  # If we did not find a tcsConfig, assume old format
+  if (!$foundConfig) {
+    # Name of the line in the exec is SET_TARGET for tag=BASE
+    my $execline = ( $tag eq 'BASE' ? 'SET_TARGET' : 'SET_$tag' );
+    for my $line (@exec) {
+      if ($line =~ /^$execline/) {
+	my @content = split /\s+/, $line;
+	$target = new Astro::Coords(
+				    name => $content[1],
+				    type => $content[2],
+				    ra => $content[3],
+				    dec => $content[4],
+				    units => 's',
+				   );
+	last;
+      }
+    }
+  }
+
+  return $target;
 }
 
 =item B<summary>
@@ -794,8 +824,41 @@ sub summary {
   return $s;
 }
 
-
 =back
+
+=begin __PRIVATE__METHODS__
+
+=head2 Private Methods
+
+=over 4
+
+=item B<_prepend_dir>
+
+If the supplied string does not include a directory specification,
+prepend the directory stored in C<inputdir>. If it does contain a
+directory, simply return it.
+
+ $file = $seq->_prepend_dir( $file );
+
+=cut
+
+sub _prepend_dir {
+  my $self = shift;
+  my $file = shift;
+
+  my ($vol, $dir, $base) = File::Spec->splitpath( $file );
+
+  # no directory, add one
+  if (!$dir && $base eq $file) {
+    # Get the input directory and prepend it
+    my $indir = $self->inputdir;
+    $file = File::Spec->catfile( $indir, $file);
+  }
+
+  return $file;
+}
+
+=end __PRIVATE__METHODS__
 
 =head1 BUGS
 
