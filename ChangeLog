@@ -1,3 +1,7 @@
+2004-01-20  Tim Jenness  <timj@jach.hawaii.edu>
+
+	* Sequence.pm (summary): Add instrument name to summary
+
 2004-01-19  Tim Jenness  <tjenness@cpan.org>
 
 	* Sequence.pm (getCoords): Add support for telConfig XML

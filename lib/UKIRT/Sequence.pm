@@ -817,7 +817,8 @@ sub summary {
   my $guide = (defined $gname ? "[Guide=$gname]" : "[No Guide]");
 
   # Get the content
-  my $s = sprintf("%-12s %s %-12s", 
+  my $s = sprintf("%-12s %-12s %s %-12s", 
+		  $self->getInstrument,
 		  $self->getTargetName,
 		  $guide,
 		  scalar($self->getWaveBand));
