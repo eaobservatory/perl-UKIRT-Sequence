@@ -30,6 +30,7 @@ our $VERSION = '0.01';
 
 use Astro::Coords;
 use Astro::WaveBand;
+use File::Spec;
 
 # Overloading
 #use overload '""' => "_stringify";
@@ -68,6 +69,7 @@ sub new {
 		   Exec => [],
 		   Configs => {},
 		   ConfigNames => [],
+		   InputDir => File::Spec->curdir,
 		   InputFile => undef,
 		  }, $class;
 
@@ -90,16 +92,46 @@ sub new {
 =item B<inputfile>
 
 The name of the exec used to populate this object (if the name
-is known).
+is known). Directory path is not included (see C<inputdir> method).
+
+Automatically populated when an exec is read. If called with a
+file that includes a directory path, the directory is stripped and
+stored in the C<inputdir> attribute. Directory path is not modified
+if none is supplied.
 
 =cut
 
 sub inputfile {
   my $self = shift;
   if (@_) {
-    $self->{InputFile} = shift;
+    my $path = shift;
+    my ($vol,$dir, $file) = File::Spec->splitpath($path);
+    croak "Volume is defined [$vol] but this module does not know what to do with it!"
+      if $vol;
+    $self->{InputFile} = $file;
+
+    # Do nothing if no directory specified (will refer to cwd) by default
+    $self->inputdir( $dir ) if $dir;
   }
   return $self->{InputFile};
+}
+
+=item B<inputdir>
+
+The name of the directory containing the exec (and, by inference)
+the associated config files.
+
+Automatically populated when a file is stored in C<inputfile>
+attribute (by stripping the path). Defaults to current directory.
+
+=cut
+
+sub inputdir {
+  my $self = shift;
+  if (@_) {
+    $self->{InputDir} = shift;
+  }
+  return $self->{InputDir};
 }
 
 =item B<exec>
@@ -195,7 +227,8 @@ exec.
   $seq->readseq( $exec );
 
 Assumes that either the full path is specified in the file name
-or the file is available in the current directory.
+or the file is available in the current directory or that the
+C<inputdir> has been configured prior to calling this method.
 
 =cut
 
@@ -204,15 +237,20 @@ sub readseq {
 
   my $exec = shift;
 
-  open my $fh, "< $exec" or croak "Unable to read sequence $exec: $!";
+  # if we store this in the inputfile() method then the input directory
+  # will be set correctly.
+  $self->inputfile( $exec );
+
+  # Now get path to exec
+  my $path = File::Spec->catfile( $self->inputdir, $self->inputfile);
+  print "Path is $path\n";
+
+  open my $fh, "< $path" or croak "Unable to read sequence $path: $!";
   my @lines = <$fh>;
   close($fh) or croak "Error closing sequence $exec: $!";
 
   # Now pass this to the line parser
   $self->_parse_lines( \@lines );
-
-  # Store the filename for reference
-  $self->inputfile( $exec );
 
   return;
 }
@@ -233,18 +271,27 @@ Note that this routine does not attempt to determine the suffix
 and case-sensitvity from the instrument name since it is possible
 that the config is being read without knowing the instrument.
 
-Note that this assumes the config is found in the current directory
-since (it seems) UKIRT sequences do not specify a full path but assume
-the same directory as that containing the exec.
-
-TODO  - make sure that if no path is specified that the exec path is
-used.
+The assumption is that, if no path is specfied for the config file,
+that the config files are in the same directory as the exec. The
+directory is obtained via the C<inputfile> method (and automatically
+set when the exec is read). I
 
 =cut
 
 sub readconfig {
   my $self = shift;
   my $file = shift;
+
+  # need to find out whether the file includes a directory
+  # specification
+  my ($vol, $dir, $base) = File::Spec->splitpath( $file );
+
+  # no directory, add one
+  if (!$dir && $base eq $file) {
+    # Get the input directory and prepend it
+    my $indir = $self->inputdir;
+    $file = File::Spec->catfile( $indir, $file);
+  }
 
   # CGS4 configs have .aim suffix whereas other UKIRT sequences
   # have a .conf suffix. We therefore have to try both combinations
@@ -257,6 +304,7 @@ sub readconfig {
   my $found;
   for my $suffix ('','.conf','.aim') {
     my $f = $file . $suffix;
+
     if (-e $f) {
       $found = $f;
       last;
@@ -393,6 +441,16 @@ sub getTarget {
   return $target;
 }
 
+=item B<setTarget>
+
+Store new target information.
+
+=cut
+
+sub setTarget {
+  croak "setTarget not yet implemented.";
+}
+
 =item B<getGuide>
 
 Go through the exec and retrieve the guide star information.
@@ -500,23 +558,21 @@ Return the target name.
 
   $target = $seq->getTargetName;
 
+Returns "NONE" if no target is specified.
+
 =cut
 
 sub getTargetName {
   my $self = shift;
   my $c = $self->getTarget;
-  if (defined $c) {
-    return $c->name;
-  } else {
-    return undef;
-  }
+  return ( defined $c ? $c->name : "NONE");
 }
 
 =item B<getGuideName>
 
 Return the name of the guide star.
 
-  $target = $seq->getTargetName;
+  $target = $seq->getGuideName;
 
 Returns C<undef> if no guide star is specified.
 
@@ -525,11 +581,7 @@ Returns C<undef> if no guide star is specified.
 sub getGuideName {
   my $self = shift;
   my $c = $self->getGuide;
-  if (defined $c) {
-    return $c->name;
-  } else {
-    return undef;
-  }
+  return (defined $c ? $c->name : undef);
 }
 
 =item B<getWaveBand>
@@ -624,22 +676,6 @@ sub getWaveBand {
   return (wantarray ? @wb : join("/",@wb));
 }
 
-=item B<getTargetName>
-
-Retrieve the target name. Returns "NONE" if no target can be found.
-
- $target = $seq->getTargetName;
-
-=cut
-
-sub getTargetName {
-  my $self = shift;
-  my $target = $self->getTarget;
-  return "NONE" unless defined $target;
-  return $target->name;
-}
-
-
 =item B<getHeaderItem>
 
 Retrieve a named header item from the exec. These are items that
@@ -711,10 +747,14 @@ Current format:
 sub summary {
   my $self = shift;
 
+  # Guide information
+  my $gname = $self->getGuideName;
+  my $guide = (defined $gname ? "[Guide=$gname]" : "[No Guide]");
+
   # Get the content
-  my $s = sprintf("%-12s [G*=%-12s] %-12s", 
+  my $s = sprintf("%-12s %s %-12s", 
 		  $self->getTargetName,
-		  $self->getGuideName,
+		  $guide,
 		  scalar($self->getWaveBand));
   return $s;
 }
@@ -722,6 +762,11 @@ sub summary {
 
 =back
 
+=head1 BUGS
+
+Note that this class can not write/edit execs/configs. This is partly
+because oof a lack of time and because of the realisation that CGS4
+aim files would require a non-standard implementation.
 
 =head1 SEE ALSO
 
