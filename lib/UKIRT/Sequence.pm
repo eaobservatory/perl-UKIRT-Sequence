@@ -66,6 +66,7 @@ sub new {
   my $seq = bless {
 		   Exec => [],
 		   Configs => {},
+		   ConfigNames => [],
 		   InputFile => undef,
 		  }, $class;
 
@@ -160,6 +161,24 @@ sub configs {
   }
 }
 
+=item B<config_names>
+
+Order of the configs in the exec. Returns keys suitable for use
+with the hash returned by the C<configs> method.
+
+  @names = $seq->config_names();
+
+=cut
+
+sub config_names {
+  my $self = shift;
+  if (@_) {
+    croak "Can not modify order after object is created"
+      if @{$self->{ConfigNames}};
+    @{$self->{ConfigNames}} = @_;
+  }
+  return @{$self->{ConfigNames}};
+}
 
 =back
 
@@ -173,6 +192,9 @@ Read a sequence into the object given a file name pointing to the
 exec.
 
   $seq->readseq( $exec );
+
+Assumes that either the full path is specified in the file name
+or the file is available in the current directory.
 
 =cut
 
@@ -199,6 +221,13 @@ sub readseq {
 Given a config name, read it in and convert it to a hash.
 
   %config = $seq->readconfig( $configfile );
+
+Note that this assumes the config is found in the current directory
+since (it seems) UKIRT sequences do not specify a full path but assume
+the same directory as that containing the exec.
+
+TODO  - make sure that if no path is specified that the exec path is
+used.
 
 =cut
 
@@ -243,7 +272,9 @@ sub _parse_lines {
   my $lines = shift;
 
   # somewhere to store the config information
+  # both by name and by position in the file
   my %configs;
+  my @confs;
 
   # Remove any leftover newlines
   chomp(@$lines);
@@ -253,13 +284,16 @@ sub _parse_lines {
   for my $line (@$lines) {
     # We do need to read config files
     if ($line =~ /^loadConfig\s+(.*)/) {
-      $configs{$1} = { $self->readconfig( $1 ) };
+      my %c = $self->readconfig( $1 );
+      $configs{$1} = \%c;
+      push(@confs, $1);
     }
   }
 
   # Store it
   $self->exec( $lines );
   $self->configs( %configs );
+  $self->config_names( @confs );
   return;
 }
 
@@ -405,6 +439,10 @@ sub getWaveBand {
   # For UFTI we need a filter
   my $inst = $self->getInstrument;
 
+  # If we can change camera mode via the config then we clearly
+  # need to put this if statement inside a loop and not use the
+  # getConfigItem method to obtain the values.
+
   my ($key, $type);
   if ($inst eq 'UFTI') {
     $key = 'filter';
@@ -530,10 +568,8 @@ For a specified configuration option, return the corresponding value
 from each config. There will be as many return elements as there are
 configs, even if the key does not exist in the configuration.
 
-The order of the entries in the array will match the sorted order
-of the config names (which will usually match the order they
-will be executed. This may be a bug [and they should be forced to
-match the execution order].
+The order of the entries in the array will match the order of the configs
+in the exec.
 
   @values = $seq->getConfigItem( $key );
 
@@ -544,7 +580,7 @@ sub getConfigItem {
   my $key = shift;
   my %configs = $self->configs;
 
-  my @v = map { $configs{$_}->{$key} } sort keys %configs;
+  my @v = map { $configs{$_}->{$key} } $self->config_names;
   return @v;
 }
 
