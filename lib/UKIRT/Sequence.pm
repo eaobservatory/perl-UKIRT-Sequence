@@ -461,6 +461,31 @@ sub clearTarget {
   croak "clearTarget not yet implemented.";
 }
 
+=item B<fixup>
+
+Fix up any just-in-time sections of the sequence.
+Currently is a no-op provided for compatibility with the queue
+system.
+
+=cut
+
+sub fixup {
+  return;
+}
+
+=item B<verify>
+
+Verify that the sequence is observable.
+
+Currently is a no-op provided for compatibility with the queue
+system.
+
+=cut
+
+sub verify {
+  return;
+}
+
 =item B<getGuide>
 
 Go through the exec and retrieve the guide star information.
@@ -786,7 +811,7 @@ C<SCUBA::ODF> for reading and writing groups of SCUBA ODFs.
 
 Tim Jenness E<lt>t.jenness@jach.hawaii.eduE<gt>.
 
-Copyright (C) 2003 Particle Physics and Astronomy Research Council.
+Copyright (C) 2003-2004 Particle Physics and Astronomy Research Council.
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
