@@ -521,6 +521,9 @@ Retrieve the name of the instrument taking part in this sequence.
 
   $inst = $seq->getInstrument();
 
+Set to "UNKNOWN" if an instrument can not be determined from the
+exec or config.
+
 =cut
 
 sub getInstrument {
@@ -529,6 +532,7 @@ sub getInstrument {
   # Get the exec
   my @exec = $self->exec;
 
+  # First scan through the exec looking for a set_instr line
   my $inst;
   for my $line (@exec) {
     if ($line =~ /^[-]?set_inst\s+(.*)/i) {
@@ -536,6 +540,23 @@ sub getInstrument {
       last;
     }
   }
+
+  # If that did not work try looking in the config
+  if (!defined $inst) {
+    my @values = grep { defined $_ } $self->getConfigItem( "instrument" );
+    $inst = $values[0];
+  }
+
+
+  # Finally, get the instrument from the filename
+  if (!defined $inst) {
+    my $file = $self->inputfile;
+    # split into two parts
+    ($inst, my $rest) = split(/_/,$file,2);
+  }
+
+  $inst = "UNKNOWN" if !defined $inst;
+
   return uc($inst);
 
 }
