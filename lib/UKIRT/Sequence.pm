@@ -390,7 +390,7 @@ sub getTargetName {
 =item B<getWaveBand>
 
 Return a list of C<Astro::WaveBand> objects associated with the sequence.
-Duplicates are ignored, but order is retained.
+Consecutive duplicates are ignored, but order is retained.
 
  @wb = $seq->getWaveband;
 
@@ -456,22 +456,15 @@ sub getWaveBand {
   # Now read the config
   my @vals = $self->getConfigItem( $key );
 
-  # remove duplicates regardless of order
-  my %dup = map { (defined $_ ? ($_, '') : () ) } @vals;
-
-  # Attempt to retain order
-  # go through the original list, if an item exists in %dup, push it
-  # onto the @uniq array and remove it from %dup. Continue until the
-  # end when %dup should be empty.
+  # Remove consecutive entries that are duplicates but not
+  # entries that change and then revert
+  my $current = '';
   my @uniq;
   for my $w (@vals) {
-    if (exists $dup{$w}) {
-      push(@uniq, $w);
-      delete $dup{$w};
-    }
+    next if $current eq $w;
+    push(@uniq, $w);
+    $current = $w;
   }
-  croak "Error - dup hash should now be empty"
-    if values %dup;
 
   # Now create the objects
   my @wb = map { new Astro::WaveBand( Instrument => $inst,
@@ -480,6 +473,22 @@ sub getWaveBand {
 
   return (wantarray ? @wb : join("/",@wb));
 }
+
+=item B<getTargetName>
+
+Retrieve the target name. Returns "NONE" if no target can be found.
+
+ $target = $seq->getTargetName;
+
+=cut
+
+sub getTargetName {
+  my $self = shift;
+  my $target = $self->getTarget;
+  return "NONE" unless defined $target;
+  return $target->name;
+}
+
 
 =item B<getHeaderItem>
 
@@ -545,14 +554,20 @@ Return a one-line summary of the Sequence.
 
   $summary = $seq->summary;
 
+Current format:
+
+  TargetName Filters
+
 =cut
 
 sub summary {
   my $self = shift;
 
   # Get the content
-  
-
+  my $s = sprintf("%-12s %-12s", 
+		  $self->getTargetName, 
+		  scalar($self->getWaveBand));
+  return $s;
 }
 
 
