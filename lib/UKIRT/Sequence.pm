@@ -37,7 +37,7 @@ use File::Spec;
 #use overload '""' => "_stringify";
 
 use vars qw/ $DEBUG /;
-$DEBUG = 1;
+$DEBUG = 0;
 
 =head1 METHODS
 
@@ -244,7 +244,6 @@ sub readseq {
 
   # Now get path to exec
   my $path = File::Spec->catfile( $self->inputdir, $self->inputfile);
-  print "Path is $path\n";
 
   open my $fh, "< $path" or croak "Unable to read sequence $path: $!";
   my @lines = <$fh>;
@@ -299,32 +298,40 @@ sub readconfig {
   # it will not be changed if it has a full directory path
   push(@files, $self->_prepend_dir( $file ));
 
-  # if dir1 is the same as file we have a proper directory specification
-  # If they are different we also need to search in the ../configs directory
-  push( @files, $self->_prepend_dir( $file,
+  # If we have only been given a filename without path we need to try
+  # different ideas (since the exec may not be giving us all the info we
+  # need
+  if ($files[0] ne $file) {
+    # If the file did not include a directory, also try for a lower case
+    # version of the file name. This is important for CGS4 which uses
+    # lower case filenames
+    push(@files, $self->_prepend_dir( lc($file) ));
+
+    # and also look for the ../configs directory [in both standard case
+    # and lower case variant]
+    push(@files, $self->_prepend_dir( $file,
 				     File::Spec->catdir( File::Spec->updir,
-							 "configs")
-				   )
-      ) if $files[0] ne $file;
+							 "configs")));
+
+    push(@files, $self->_prepend_dir( lc($file),
+				     File::Spec->catdir( File::Spec->updir,
+							 "configs")));
+  }
 
   # CGS4 configs have .aim suffix whereas other UKIRT sequences
   # have a .conf suffix. We therefore have to try both combinations
   # plus the variation where the file is fully specified.
-  # Since CGS4 uses lower case for its .aim files (since they must
-  # be visible on a vax) we also try doing a lc() as last resort.
+  # Assume that the @files array includes both normal and lower case
+  # variants since CGS4 must be lower case
   # Use -e rather than open() to test existence since it is not likely
   # that we will encounter a race condition
   # All three suffices
   my $found;
   PATHS: for my $path (@files) {
     for my $suffix ('','.conf','.aim') {
+      print "CHECKING $path$suffix\n" if $DEBUG;
       if (-e $path.$suffix) {
 	$found = $path . $suffix;
-	last PATHS;
-      }
-      # lower case
-      if (-e $path. lc($suffix)) {
-	$found = $path.lc($suffix);
 	last PATHS;
       }
     }
@@ -619,6 +626,38 @@ sub getGuideName {
   return (defined $c ? $c->name : undef);
 }
 
+=item B<getCameraMode>
+
+Retrieve operating mode of camera. Can be 'imaging', 'spectroscopy'
+or 'ifu'. Consecutive duplicates are ignored but order is retained.
+
+ @modes = $seq->getCameraMode.
+
+In scalar context, the waveband objects are stringified and joined with a 
+"/" delimiter.
+
+=cut
+
+sub getCameraMode {
+  my $self = shift;
+
+  # need to know the instrument
+  my $inst = $self->getInstrument;
+
+  my @cam;
+  if ($inst eq 'UFTI') {
+    push(@cam,'imaging');
+  } elsif ($inst eq 'CGS4') {
+    push(@cam,'spectroscopy');
+  } elsif ($inst eq 'MICHELLE' || $inst eq 'UIST') {
+    @cam = $self->_remove_dups( $self->getConfigItem('camera'));
+  } else {
+    croak "Unrecognized instrument: $inst\n";
+  }
+  return (wantarray ? @cam : join("/",@cam));
+}
+
+
 =item B<getWaveBand>
 
 Return a list of C<Astro::WaveBand> objects associated with the sequence.
@@ -645,34 +684,11 @@ sub getWaveBand {
   if ($inst eq 'UFTI') {
     $key = 'filter';
     $type = 'Filter';
-  } elsif ($inst eq 'UIST') {
+  } elsif ($inst eq 'UIST' || $inst eq 'MICHELLE') {
     # depends on camera mode
-    my @cam = $self->getConfigItem('camera');
-    my $c;
-    for (@cam) {
-      $c = $_;
-      last if defined $c;
-    }
+    my @cam = $self->getCameraMode;
+    my $c = $cam[0];
     croak "Unable to determine camera mode for UIST"
-      unless defined $c;
-    if ($c eq 'spectroscopy') {
-      $key = 'centralWavelength';
-      $type = 'Wavelength';
-    } else {
-      $key = 'filter';
-      $type = 'Filter';
-    }
-
-  } elsif ($inst eq 'MICHELLE') {
-    # depends on camera mode
-    # depends on camera mode
-    my @cam = $self->getConfigItem('camera');
-    my $c;
-    for (@cam) {
-      $c = $_;
-      last if defined $c;
-    }
-    croak "Unable to determine camera mode for Michelle"
       unless defined $c;
     if ($c eq 'spectroscopy') {
       $key = 'centralWavelength';
@@ -694,14 +710,7 @@ sub getWaveBand {
 
   # Remove consecutive entries that are duplicates but not
   # entries that change and then revert
-  my $current = '';
-  my @uniq;
-  for my $w (@vals) {
-    next unless defined $w;
-    next if $current eq $w;
-    push(@uniq, $w);
-    $current = $w;
-  }
+  my @uniq = $self->_remove_dups( @vals );
 
   # Now create the objects
   my @wb = map { new Astro::WaveBand( Instrument => $inst,
@@ -872,12 +881,34 @@ sub summary {
   my $gname = $self->getGuideName;
   my $guide = (defined $gname ? "[Guide=$gname]" : "[No Guide]");
 
+  my $inst = $self->getInstrument;
+  my $mode = '';
+  if ($inst eq 'CGS4') {
+    # For CGS4 we need the grating
+    $mode = join("/",$self->_remove_dups( $self->getConfigItem( 'grating' )));
+  } elsif ($inst eq 'UFTI') {
+    $mode = 'imaging';
+  } elsif ($inst eq 'UIST' || $inst eq 'MICHELLE') {
+    my @cam = $self->getCameraMode;
+    if ($cam[0] eq 'imaging') {
+      $mode = 'imaging';
+    } else {
+      $mode = join("/",$self->_remove_dups($self->getConfigItem('disperser')));
+    }
+  }
+
+
+  # For UFTI we should say simply 'imaging'
+  # For UIST we should say 'imaging' or
+
   # Get the content
-  my $s = sprintf("%-12s %-12s %s %-12s", 
+  my $s = sprintf("%-12s %-12s %s %-12s %-12s", 
 		  $self->getInstrument,
 		  $self->getTargetName,
 		  $guide,
-		  scalar($self->getWaveBand));
+		  scalar($self->getWaveBand),
+		  $mode
+		 );
   return $s;
 }
 
@@ -927,6 +958,37 @@ sub _prepend_dir {
   return $file;
 }
 
+=item B<_remove_dups>
+
+Remove consecutive entries that are duplicates but not
+entries that change and then revert.
+
+  @uniq = $self->_remove_dups( @entries );
+
+For example,  A-A-B-C-C would become A-B-C.
+
+Undefined entries are removed.
+
+=cut
+
+sub _remove_dups {
+  my $self = shift;
+  my @vals = @_;
+
+  my $current = '';
+  my @uniq;
+  for my $w (@vals) {
+    next unless defined $w;
+    next if $current eq $w;
+    push(@uniq, $w);
+    $current = $w;
+  }
+
+  return @uniq;
+}
+
+=back
+
 =end __PRIVATE__METHODS__
 
 =head1 BUGS
@@ -960,3 +1022,5 @@ this program; if not, write to the Free Software Foundation, Inc., 59 Temple
 Place,Suite 330, Boston, MA  02111-1307, USA
 
 =cut
+
+1;
