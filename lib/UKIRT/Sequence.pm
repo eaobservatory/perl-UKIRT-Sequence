@@ -30,7 +30,7 @@ our $VERSION = '0.01';
 
 use Astro::Coords;
 use Astro::WaveBand;
-use TOML::TCS;
+use JAC::OCS::Config;
 use File::Spec;
 
 # Overloading
@@ -70,6 +70,7 @@ sub new {
 		   Exec => [],
 		   Configs => {},
 		   ConfigNames => [],
+		   OCS_CONFIG => undef,
 		   InputDir => File::Spec->curdir,
 		   InputFile => undef,
 		  }, $class;
@@ -212,6 +213,43 @@ sub config_names {
     @{$self->{ConfigNames}} = @_;
   }
   return @{$self->{ConfigNames}};
+}
+
+=item B<coordinates>
+
+A C<JAC::OCS::Config> object representing the coordinates of this
+observation. See the C<getCoords> method for details on how to request
+tagged coordinates directly.
+
+  $ocs = $seq->coordinates();
+
+=cut
+
+sub coordinates {
+  my $self = shift;
+  if ( @_ ) {
+    my $arg = shift;
+    if ( UNIVERSAL::isa( $arg, "JAC::OCS::Config")) {
+      $self->{OCS_CONFIG} = $arg;
+    } else {
+       croak "Argument to coordinates() must be an JAC::OCS::Config object.";
+    }
+  }
+  return $self->{OCS_CONFIG};
+}
+
+=item B<old_coords>
+
+The exec uses an old style coordinate specification.
+
+=cut
+
+sub old_coords {
+  my $self = shift;
+  if ( @_ ) {
+    $self->{OLD_COORDS} = shift;
+  }
+  return $self->{OLD_COORDS};
 }
 
 =back
@@ -401,26 +439,126 @@ sub _parse_lines {
   # both by name and by position in the file
   my %configs;
   my @confs;
+  my $ocs;
+  my %tags;
 
   # Remove any leftover newlines
   chomp(@$lines);
 
   # go through the exec
-  # Do we populate target and instrument information now?
+  # We populate target information now but defer instrument discovery
   for my $line (@$lines) {
     # We do need to read config files
     if ($line =~ /^loadConfig\s+(.*)/) {
       my %c = $self->readconfig( $1 );
       $configs{$1} = \%c;
       push(@confs, $1);
+    } elsif ( $line =~ /^telConfig/) {
+      $ocs = $self->readtcsxml( $line );
+      $self->old_coords( 0 );
+    } elsif ( $line =~ /^SET_(\w+)/) {
+      # Possibly a target specification
+      my $b = $self->_parse_oldtcs( $line );
+      $tags{$b->tag} = $b if defined $b;
     }
+  }
+
+  # did we get some old coordinates?
+  if ( keys %tags  && !defined $ocs) {
+    $self->old_coords( 1 );
+    my $tcs = new JAC::OCS::Config::TCS;
+    $tcs->telescope( "UKIRT" );
+    $tcs->tags( %tags );
+    $ocs = new JAC::OCS::Config;
+    $ocs->tcs( $tcs );
   }
 
   # Store it
   $self->exec( $lines );
   $self->configs( %configs );
   $self->config_names( @confs );
+  $self->coordinates( $ocs ) if defined $ocs;
   return;
+}
+
+=item B<readtcsxml>
+
+Given a telConfig line, read the XML file and return it as a
+C<JAC::OCS::Config> object.
+
+  $ocs = $seq->readtcsxml( $line );
+
+=cut
+
+sub readtcsxml {
+  my $self = shift;
+  my $line = shift;
+  return unless $line =~ /telConfig/;
+
+  my @content = split /\s+/, $line;
+  my $file = $content[1];
+
+  # File will either be in the same directory as exec or in
+  # ../configs directory
+  my $xmlfile = $self->_prepend_dir( $file );
+
+  # Hmm. If it does not exist, AND no path was supplied
+  # with the filename, try looking in ../configs directory
+  if (!-e $xmlfile && $xmlfile ne $file) {
+    $xmlfile = $self->_prepend_dir( $file,
+				    File::Spec->catdir( File::Spec->updir,
+							"configs")
+				  );
+  }
+
+  croak "Unable to locate TCS XML config file $file\n"
+    unless -e $xmlfile;
+
+  my $ocs = new JAC::OCS::Config( File => $xmlfile,
+				  telescope => 'UKIRT',
+				  validation => 0,
+				);
+  return $ocs;
+}
+
+=item B<_parse_oldtcs>
+
+Parse the old-style coordinate specification. Returns a
+C<JAC::OCS::Config::TCS::BASE> object, or an empty list if the line is
+not parseable (possibly because not all SET_ lines refer to
+coordinates.
+
+ $base = $seq->_parse_oldtcs( $line );
+
+=cut
+
+sub _parse_oldtcs {
+  my $self = shift;
+  my $line = shift;
+
+  return unless $line =~ /^SET_(\w+)/;
+
+  # Work out the tag name
+  my $tag = $1;
+  $tag = "BASE" if $tag eq 'TARGET';
+
+  # now parse the line
+  my @content = split /\s+/, $line;
+  return unless @content == 7;
+
+  my $target = new Astro::Coords(
+				 name => $content[1],
+				 type => $content[2],
+				 ra => $content[3],
+				 dec => $content[4],
+				 units => 's',
+				);
+
+  my $base = new JAC::OCS::Config::TCS::BASE;
+  $base->tag( $tag );
+  $base->coords( $target );
+
+  return $base;
 }
 
 =back
@@ -799,67 +937,11 @@ sub getCoords {
   my $tag = shift;
   $tag = uc($tag);
 
-  # retrieve the exec
-  my @exec = $self->exec;
+  my $ocs = $self->coordinates;
+  return unless defined $ocs;
+  my $tcs = $ocs->tcs;
 
-  # Probably should cache this somewhere since it is not going to change
-  my $target;
-
-  # Go through the exec looking for a telConfig
-  # This should generate a hit for all modern sequences
-  my $foundConfig;
-  for my $line (@exec) {
-    if ($line =~ /telConfig/) {
-      $foundConfig = 1;
-      my @content = split /\s+/, $line;
-      my $file = $content[1];
-
-      # File will either be in the same directory as exec or in
-      # ../configs directory
-      my $xmlfile = $self->_prepend_dir( $file );
-
-      # Hmm. If it does not exist, AND no path was supplied
-      # with the filename, try looking in ../configs directory
-      if (!-e $xmlfile && $xmlfile ne $file) {
-	$xmlfile = $self->_prepend_dir( $file,
-					File::Spec->catdir( File::Spec->updir,
-							    "configs")
-				      );
-      }
-
-      croak "Unable to locate TCS XML config file $file\n"
-	unless -e $xmlfile;
-
-      my $tcs = new TOML::TCS( File => $xmlfile );
-
-      # Get the target information associated with this tag
-      $target = $tcs->getCoords( $tag );
-
-      # Abort from the search
-      last;
-    }
-  }
-
-  # If we did not find a tcsConfig, assume old format
-  if (!$foundConfig) {
-    # Name of the line in the exec is SET_TARGET for tag=BASE
-    my $execline = ( $tag eq 'BASE' ? 'SET_TARGET' : 'SET_$tag' );
-    for my $line (@exec) {
-      if ($line =~ /^$execline/) {
-	my @content = split /\s+/, $line;
-	$target = new Astro::Coords(
-				    name => $content[1],
-				    type => $content[2],
-				    ra => $content[3],
-				    dec => $content[4],
-				    units => 's',
-				   );
-	last;
-      }
-    }
-  }
-
-  return $target;
+  return $tcs->getCoords( $tag );
 }
 
 =item B<summary>
