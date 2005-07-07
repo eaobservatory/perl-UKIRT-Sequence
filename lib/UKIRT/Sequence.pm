@@ -1075,7 +1075,7 @@ sub _remove_dups {
 =head1 BUGS
 
 Note that this class can not write/edit execs/configs. This is partly
-because oof a lack of time and because of the realisation that CGS4
+because of a lack of time and because of the realisation that CGS4
 aim files would require a non-standard implementation.
 
 =head1 SEE ALSO
@@ -1086,7 +1086,7 @@ C<SCUBA::ODF> for reading and writing groups of SCUBA ODFs.
 
 Tim Jenness E<lt>t.jenness@jach.hawaii.eduE<gt>.
 
-Copyright (C) 2003-2004 Particle Physics and Astronomy Research Council.
+Copyright (C) 2003-2005 Particle Physics and Astronomy Research Council.
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
