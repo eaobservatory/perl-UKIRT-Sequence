@@ -66,7 +66,7 @@ sub new {
       return UKIRT::Sequence::Config::ORAC->new( File => $args{File} );
     } elsif ( $args{File} =~ /\.aim$/i) {
       # AIM config
-      return UKIRT::Sequence::Config::ORAC->new( File => $args{File} );
+      return UKIRT::Sequence::Config::AIM->new( File => $args{File} );
     } else {
       throw UKIRT::SequenceError::UnrecognizedConfig( "Unable to determine config type from suffix: '$args{File}'");
     }
@@ -190,7 +190,7 @@ sub setItem {
   $self->{ITEMS}->{$item} = $value;
 
   # Now edit the line in the config itself
-  $self->_modify_keyval_line( $key, $value );
+  $self->_modify_keyval_line( $item, $value );
 
 }
 
@@ -219,10 +219,10 @@ sub _parse_from_file {
   my $file = shift;
 
   # open the file
-  open my $fh, "< $found" or 
-    or throw UKIRT::SequenceError::FileError( "Unable to open file '$file'")
+  open my $fh, "< $file"
+    or throw UKIRT::SequenceError::FileError( "Unable to open file '$file'");
   my @lines = <$fh>;
-  close($fh) or 
+  close($fh)
     or throw UKIRT::SequenceError::FileError("Error closing config $file: $!");
 
   # now call format specific parser
@@ -255,6 +255,7 @@ sub _parse_lines {
     chomp $line;
     my ($key, $value) = $self->_parse_config_line( $line );
     next unless defined $key;
+
     $conf{$key} = $value;
   }
 
