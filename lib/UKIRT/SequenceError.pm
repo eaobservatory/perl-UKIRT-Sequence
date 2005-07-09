@@ -43,6 +43,24 @@ The following exceptions are available:
 
 =over 4
 
+=item B<UKIRT::SequenceError::BadArgs>
+
+Bad arguments have been supplied to a method.
+
+=cut
+
+package UKIRT::SequenceError::BadArgs;
+use base qw/ UKIRT::SequenceError /;
+
+=item B<UKIRT::SequenceError::FileError>
+
+Error occurred when opening a file.
+
+=cut
+
+package UKIRT::SequenceError::FileError;
+use base qw/ UKIRT::SequenceError /;
+
 =item B<UKIRT::SequenceError::MissingTarget>
 
 An attempt has been made to verify the state of the sequence
@@ -53,7 +71,14 @@ but the sequence is missing target information.
 package UKIRT::SequenceError::MissingTarget;
 use base qw/ UKIRT::SequenceError /;
 
+=item B<UKIRT::SequenceError::UnrecognizedConfig>
 
+The supplied config could not be understood by the constructor.
+
+=cut
+
+package UKIRT::SequenceError::UnrecognizedConfig;
+use base qw/ UKIRT::SequenceError /;
 
 =back
 
@@ -65,7 +90,7 @@ L<Error>, L<OMP::Error>, L<SCUBA::ODFError>.
 
 Tim Jenness E<lt>t.jenness@jach.hawaii.eduE<gt>
 
-Copyright (C) 2003 Particle Physics and Astronomy Research Council.
+Copyright (C) 2003-2005 Particle Physics and Astronomy Research Council.
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
