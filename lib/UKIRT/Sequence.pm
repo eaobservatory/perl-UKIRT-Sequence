@@ -17,7 +17,7 @@ UKIRT::Sequence - Parse and manipulate a UKIRT sequence
 =head1 DESCRIPTION
 
 Parse and manipulate a UKIRT sequence (consisting of a single
-exec and multiple instrument configs).
+exec and multiple instrument configs and TCS XML).
 
 =cut
 
@@ -26,12 +26,13 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Astro::Coords;
 use Astro::WaveBand;
 use JAC::OCS::Config;
 use File::Spec;
+use UKIRT::Sequence::Config;
 
 # Overloading
 #use overload '""' => "_stringify";
@@ -157,19 +158,19 @@ sub exec {
 
 The instrument configurations used by the exec. Returned as a
 hash where the keys correspond to the config name and
-the values correspond to a reference to a hash representing the
-specific instrument config.
+the values correspond to a C<UKIRT::Sequence::Config> object.
 
   %configs = $seq->configs();
 
-Returns the named config as a hash if a single argument is given:
+Returns the named config as a C<UKIRT::Sequence::Config> object if a
+single argument is given:
 
-  %config = $seq->configs( $config_name );
+  $config = $seq->configs( $config_name );
 
 Configs can be stored (overwriting if necessary) by specifying 
-config names and references to hashes:
+config names and corresponding objects:
 
-  $seq->configs( $config1 => { }, $config2 => { } );
+  $seq->configs( $config1 => $cfg1, $config2 => $cfg2 );
 
 =cut
 
@@ -180,9 +181,9 @@ sub configs {
       # We have a request for a config
       my $config = shift;
       if (exists $self->{Configs}->{$config}) {
-	return %{ $self->{Configs}->{$config}};
+	return $self->{Configs}->{$config};
       } else {
-	return ();
+	return;
       }
     } else {
       my %newconf = @_;
@@ -378,43 +379,8 @@ sub readconfig {
   croak "Unable to locate config file with root name $file"
     unless defined $found;
 
-  open my $fh, "< $found" or croak "Error reading config $found: $!";
-  my @lines = <$fh>;
-  close($fh) or croak "Error closing config $file: $!";
-
-  # We need to be able to extract information from both a ORAC .conf
-  # file and an AIM .aim file (e.g. for CGS4) Note that the AIM format
-  # can not be written out since the object representation of using a
-  # hash is not sufficient (and if we want to write we should be using
-  # a UKIRT::Sequence::Config::AIM and UKIRT::Sequence::Config::ORAC
-  # subclasses)
-  my %conf;
-  if ($found =~ /\.conf$/) {
-    for my $line (@lines) {
-      # split into 2 parts / dropping the =
-      chomp $line;
-      my ($key, undef, $value) = split /\s+/,$line, 3;
-
-      $conf{$key} = $value;
-    }
-  } elsif ($found =~ /\.aim$/) {
-    # simple parser
-    for my $line (@lines) {
-      # skip anything that has a colon in it
-      next if $line =~ /:/;
-      # remove leading and trailing space
-      $line =~ s/^\s+//;
-      $line =~ s/\s+$//;
-      next unless length($line);
-      # split into two chunks (keys will include spaces)
-      my ($value, $key) = split /\s+/,$line, 2;
-      $conf{$key} = $value;
-    }
-  } else {
-    croak "Unrecognized file suffix. Neither .aim nor .conf in '$found'";
-  }
-
-  return %conf;
+  my $cfg = new UKIRT::Sequence::Config( File => $found);
+  return $cfg;
 }
 
 =item B<_parse_lines>
@@ -450,8 +416,8 @@ sub _parse_lines {
   for my $line (@$lines) {
     # We do need to read config files
     if ($line =~ /^loadConfig\s+(.*)/) {
-      my %c = $self->readconfig( $1 );
-      $configs{$1} = \%c;
+      my $c = $self->readconfig( $1 );
+      $configs{$1} = $c;
       push(@confs, $1);
     } elsif ( $line =~ /^telConfig/) {
       $ocs = $self->readtcsxml( $line );
@@ -910,7 +876,7 @@ sub getConfigItem {
   my $key = shift;
   my %configs = $self->configs;
 
-  my @v = map { $configs{$_}->{$key} } $self->config_names;
+  my @v = map { $configs{$_}->getItem($key) } $self->config_names;
   return @v;
 }
 
