@@ -1,6 +1,9 @@
 Makefile.PL
-Sequence.pm
-SequenceError.pm
+lib/UKIRT/Sequence.pm
+lib/UKIRT/SequenceError.pm
+lib/UKIRT/Sequence/Config/AIM.pm
+lib/UKIRT/Sequence/Config/ORAC.pm
+lib/UKIRT/Sequence/Config.pm
 t/simple.t
 execs/CGS4_20040109_093801.exec
 execs/Michelle_20040107_210639.exec
