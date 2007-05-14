@@ -1,13 +1,21 @@
+2005-07-06  Tim Jenness  <tjenness@cpan.org>
+
+	* lib/UKIRT/Sequence.pm: Move to new tree in preparation for
+	Config classes.
+
+	* lib/UKIRT/Sequence.pm: Switch from TOML to JAC::OCS::Config for
+	target information parsing.
+
 2004-09-13  Tim Jenness  <tjenness@cpan.org>
 
 	* Sequence.pm: Add WFCAM 
 
-2004-01-21  Tim Jenness  <timj@jach.hawaii.edu>
+2004-01-21  Tim Jenness  <tjenness@cpan.org>
 
 	* Sequence.pm (readconfig): Now support the use of a ../configs
 	directory for configs (just like at UKIRT!)
 
-2004-01-20  Tim Jenness  <timj@jach.hawaii.edu>
+2004-01-20  Tim Jenness  <tjenness@cpan.org>
 
 	* Sequence.pm (summary): Add instrument name to summary
 
