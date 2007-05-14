@@ -12,6 +12,7 @@ loadConfig CGS4_20040109_093801_1
 setrotator 0.0
 startGroup
 -setHeader RMTAGENT none
+-setheader PROJECT U/SERV/1489
 -setHeader AGENTID none
 -setHeader NOFFSETS 4
 setHeader GRPMEM T
