@@ -28,6 +28,8 @@ use Carp;
 
 our $VERSION = '0.02';
 
+use Time::HiRes qw/ gettimeofday /;
+
 use Astro::Coords;
 use Astro::WaveBand;
 use JAC::OCS::Config;
@@ -71,6 +73,7 @@ sub new {
 		   Exec => [],
 		   Configs => {},
 		   ConfigNames => [],
+		   ExecModified => 0,
 		   OCS_CONFIG => undef,
 		   InputDir => File::Spec->curdir,
 		   InputFile => undef,
@@ -152,6 +155,25 @@ sub exec {
     @{ $self->{Exec} } = @{ shift(@_) };
   }
   return @{ $self->{Exec} };
+}
+
+=item B<modified>
+
+True if the exec has been modified since it was read. This can be used to decide
+whether the file needs to be written out or whether the original version can be
+used instead.
+
+  $seq->modified( 1 );
+
+=cut
+
+sub modified {
+  my $self = shift;
+  if (@_) {
+    my $val = shift;
+    $self->{ExecModified} = ( $val ? 1 : 0 );
+  }
+  return $self->{ExecModified};
 }
 
 =item B<configs>
@@ -686,6 +708,20 @@ sub getMSBID {
   return $self->getHeaderItem( 'MSBID' );
 }
 
+=item B<getMSBTID>
+
+Retrieve the MSB transaction ID associated with this exec. Returns C<undef> if
+one can not be found.
+
+  $msbid = $seq->getMSBTID;
+
+=cut
+
+sub getMSBTID {
+  my $self = shift;
+  return $self->getHeaderItem( 'MSBTID' );
+}
+
 =item B<getObsLabel>
 
 Return the observation label (useful for suspending an MSB).
@@ -858,6 +894,7 @@ sub getHeaderItem {
   return (wantarray ?  @values : $values[-1]);
 }
 
+
 =item B<getConfigItem>
 
 For a specified configuration option, return the corresponding value
@@ -961,6 +998,184 @@ sub summary {
 
 =back
 
+=head2 Content modification
+
+=over 4
+
+=item B<setHeaderItem>
+
+Modifies the sequence to include either a new setHeader directive
+or change the all occurences of that header if it pre-exists.
+
+  $seq->setHeaderItem( $header, $value );
+
+The header will be inserted after the first setHeader directive
+if the header does not exist.
+
+The optional third argument controls where in the header it goes.
+It is only accessed for a new header, not when modifying an existing header.
+
+  $seq->setHeaderItem( $header, $value, qr/MSBID/ );
+
+The header will be inserted after the first line in the exec that matches
+the supplied regular expression.
+
+If nowhere can be found to place the setHeader command it is inserted at the front.
+
+=cut
+
+sub setHeaderItem {
+  my $self = shift;
+  my $header = uc(shift);
+  my $newval = shift;
+  my $posn = shift;
+
+  # Get the exec contents
+  my @exec = $self->exec;
+
+  # form a regex that will allow us to know that we are changing
+  # an existing header
+  my $existing = qr/^([-]?setHeader\s+$header)\s+/;
+
+  # We now need to look for the header
+  my $replaced;
+  for my $line (@exec) {
+    if ($line =~ $existing) {
+      $line = $1 . " $newval";
+      $replaced = 1;
+    }
+  }
+
+  # if we did not find a header to replace we have to insert one
+  if (!$replaced) {
+
+    # Default position will be after first setHeader or startGroup
+    if (!defined $posn) {
+      $posn = qr/(setHeader|startGroup)/;
+    } elsif (not ref $posn) {
+      $posn = qr/$posn/;
+    } elsif (ref($posn) eq 'Regexp') {
+      # this is okay. carry on.
+    } else {
+      croak "3rd Argument to setHeaderItem must be Regexp object or string";
+    }
+
+    # find the location to splice
+    # default if we find no match will be to insert it in the first line ($index+1)
+    my $index = -1;
+    for my $i (0..$#exec) {
+      if ($exec[$i] =~ $posn) {
+	$index = $i;
+	last;
+      }
+    }
+
+    # put this new line one after the location we found
+    splice(@exec, $index+1, 0, "setHeader $header $newval");
+
+  }
+
+  # update the object
+  $self->exec( \@exec );
+  $self->modified( 1 );
+  return;
+}
+
+=item B<setMSBTID>
+
+Set the MSB transaction ID.
+
+ $seq->setMSBTID( $tid );
+
+=cut
+
+sub setMSBTID {
+  my $self = shift;
+  my $tid = shift;
+  croak "MSB transaction ID is not defined"
+    unless defined $tid;
+  $self->setHeaderItem( "MSBTID", $tid, qr/MSBID/);
+}
+
+=back
+
+=head2 Queue compatibility methods
+
+The queue requires some standard methods to simplify operation.
+
+=over 4
+
+=item B<msbtid>
+
+Return or set the MSB transaction ID.
+
+  $seq->msbtid( $tid );
+  $tid = $seq->msbtid;
+
+Wrapper around the getMSBTID
+
+=cut
+
+sub msbtid {
+  my $self = shift;
+  if (@_) {
+    $self->setMSBTID( @_ );
+  }
+  return $self->getMSBTID;
+}
+
+=back
+
+=head2 Output Methods
+
+=over 4
+
+=item B<writeseq>
+
+Writes the sequence/exec to the specified output directory and returns the
+name of the sequence/exec that was created.
+
+ $file = $seq->writeseq( $outputdir );
+
+Configs are not updated and will be referenced as they were originally named.
+
+=cut
+
+sub writeseq {
+  my $self = shift;
+  my $dir = shift;
+  # In the future this may change to match JAC::OCS::Config
+  # but for now the queue just requires a simple interface
+  croak "Must supply an output directory name"
+    unless defined $dir;
+
+  # The filename is mandated to be made of the instrument name
+  # and a timestamp
+  my $inst = $self->getInstrument;
+
+  # We use a more accurate timestamp to guarantee that we will not clash
+  # with the translator version
+  my ($sec, $mic_sec) = gettimeofday();
+  my @ut = gmtime( $sec );
+
+  my $sname = sprintf( "%s_%04d%02d%02d_%02d%02d%02d_%06d.exec",
+		       $inst,($ut[5]+1900),($ut[4]+1),$ut[3],
+		       $ut[2],$ut[1],$ut[0], $mic_sec);
+
+  my $fullname = File::Spec->catdir( $dir, $sname );
+
+  open (my $fh, "> $fullname") or
+    croak "Unable to open output file $fullname: $!";
+
+  my @exec = $self->exec;
+  print $fh join("\n",@exec)."\n";
+  close ($fh) or croak "Error closing exec file $fullname: $!";
+
+  return $fullname;
+}
+
+=back
+
 =begin __PRIVATE__METHODS__
 
 =head2 Private Methods
@@ -1040,24 +1255,24 @@ sub _remove_dups {
 
 =head1 BUGS
 
-Note that this class can not write/edit execs/configs. This is partly
-because of a lack of time and because of the realisation that CGS4
-aim files would require a non-standard implementation.
+Only headers can be modified by this class. Configs can not be changed.
 
 =head1 SEE ALSO
 
 C<SCUBA::ODF> for reading and writing groups of SCUBA ODFs.
+C<JAC::OCS::Config> for reading and writing JCMT config files.
 
 =head1 AUTHOR
 
 Tim Jenness E<lt>t.jenness@jach.hawaii.eduE<gt>.
 
+Copyright (C) 2007 Science and Technology Facilities Council.
 Copyright (C) 2003-2005 Particle Physics and Astronomy Research Council.
 All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
-Foundation; either version 2 of the License, or (at your option) any later
+Foundation; either version 3 of the License, or (at your option) any later
 version.
 
 This program is distributed in the hope that it will be useful,but WITHOUT ANY
