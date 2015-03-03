@@ -1155,8 +1155,10 @@ sub writeseq {
   # and a timestamp
   my $inst = $self->getInstrument;
 
-  # We use a more accurate timestamp to guarantee that we will not clash
-  # with the translator version
+  # If the instrument is Michelle, the filename needs to start "Michelle"
+  # rather than the upper case version returned by getInstrument.
+  $inst = 'Michelle' if $inst eq 'MICHELLE';
+
   my ($sec, $mic_sec) = gettimeofday();
   my @ut = gmtime( $sec );
 
