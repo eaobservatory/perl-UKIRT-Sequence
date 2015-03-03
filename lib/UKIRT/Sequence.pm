@@ -657,6 +657,8 @@ Retrieve the name of the instrument taking part in this sequence.
 Set to "UNKNOWN" if an instrument can not be determined from the
 exec or config.
 
+B<Note:> the instrument name is returned in upper case.
+
 =cut
 
 sub getInstrument {
