@@ -1162,11 +1162,17 @@ sub writeseq {
   my ($sec, $mic_sec) = gettimeofday();
   my @ut = gmtime( $sec );
 
-  my $sname = sprintf( "%s_%04d%02d%02d_%02d%02d%02d_%06d.exec",
-		       $inst,($ut[5]+1900),($ut[4]+1),$ut[3],
-		       $ut[2],$ut[1],$ut[0], $mic_sec);
+  my $fn_start = sprintf("%s_%04d%02d%02d_%02d%02d%02d",
+		$inst, ($ut[5]+1900), ($ut[4]+1), $ut[3],
+		$ut[2], $ut[1], $ut[0]);
 
-  my $fullname = File::Spec->catdir( $dir, $sname );
+  # The filenames become too long if milliseconds are included and the
+  # instrument is Michelle.  Therefore only include milliseconds for
+  # other instruments.
+  $fn_start .= sprintf('%03d', int($mic_sec / 1000))
+    unless $inst eq 'Michelle';
+
+  my $fullname = _make_unique_filename($dir, $fn_start, '.exec');
 
   open (my $fh, "> $fullname") or
     croak "Unable to open output file $fullname: $!";
@@ -1251,6 +1257,29 @@ sub _remove_dups {
   }
 
   return @uniq;
+}
+
+=item B<_make_unique_filename($dir, $start, $end)>
+
+Look for a 3-digit integer to add to a filename between the C<start>
+and C<$end> parts such that it is unique in directory C<$dir>.
+
+Returns the full pathname for the new file (the file is not created
+by this subroutine).
+
+=cut
+
+sub _make_unique_filename {
+  my ($dir, $start, $end) = @_;
+
+  for (my $i = 0; $i < 1000; $i ++) {
+    my $fullname = File::Spec->catdir($dir,
+        sprintf('%s%03d%s', $start, $i, $end));
+
+    return $fullname unless -e $fullname;
+  }
+
+  die 'Could not find unique filename "' . $start . 'NNN' . $end . '"';
 }
 
 =back
