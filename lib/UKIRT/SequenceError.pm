@@ -30,9 +30,7 @@ use Error;
 use warnings;
 use strict;
 
-use vars qw/ $VERSION /;
-
-'$Revision$ ' =~ /.*:\s(.*)\s\$/ && ($VERSION = $1);
+our $VERSION = '1.00';
 
 # Class hierarchy
 use base qw/ Error::Simple /;
