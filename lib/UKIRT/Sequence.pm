@@ -724,6 +724,19 @@ sub getMSBTID {
   return $self->getHeaderItem( 'MSBTID' );
 }
 
+=item B<getMSBTitle>
+
+Get the MSB title.  Returns C<undef> if not found.
+
+  my $title = $seq->getMSBTitle();
+
+=cut
+
+sub getMSBTitle {
+  my $self = shift;
+  return $self->getHeaderItem('MSBTITLE');
+}
+
 =item B<getObsLabel>
 
 Return the observation label (useful for suspending an MSB).
