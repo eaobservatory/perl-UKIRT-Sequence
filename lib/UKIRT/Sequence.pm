@@ -903,7 +903,7 @@ sub getHeaderItem {
   my @values;
   for my $line (@exec) {
     if ($line =~ /^[-]?setHeader\s+$item\s+(.*)/i) {
-      push(@values, $1);
+      push(@values, _unquote_header($1));
     }
   }
   return (wantarray ?  @values : $values[-1]);
@@ -1047,6 +1047,9 @@ sub setHeaderItem {
 
   # Get the exec contents
   my @exec = $self->exec;
+
+  # Quote the new value in preparation for inserting it.
+  $newval = _quote_header($newval);
 
   # form a regex that will allow us to know that we are changing
   # an existing header
@@ -1293,6 +1296,47 @@ sub _make_unique_filename {
   }
 
   die 'Could not find unique filename "' . $start . 'NNN' . $end . '"';
+}
+
+=item B<_quote_header($value)>
+
+Add quoting to a FITS header string.
+
+=cut
+
+sub _quote_header {
+  my $value = shift;
+
+  # It is unclear how to escape double quotes.  For now,
+  # remove them.
+  $value =~ s/"/?/g;
+
+  # Apply quotes if needed.
+  if ($value =~ / /) {
+    $value = '"' . $value . '"';
+  }
+
+  return $value;
+}
+
+=item B<_unquote_header($value)>
+
+Removing quoting from a FITS header string.
+
+=cut
+
+sub _unquote_header {
+  my $value = shift;
+
+  # If we have leading and trailing double quotes, remove them.
+  if ($value =~ /^"(.*)"\s*$/) {
+    $value = $1;
+
+    # It is unclear whether there can be escaped double quotes
+    # within the string.  For now, do nothing.
+  }
+
+  return $value;
 }
 
 =back
