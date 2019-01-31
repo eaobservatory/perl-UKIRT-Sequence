@@ -737,6 +737,17 @@ sub getMSBTitle {
   return $self->getHeaderItem('MSBTITLE');
 }
 
+=item B<getShiftType>
+
+Get the shift type.
+
+=cut
+
+sub getShiftType {
+  my $self = shift;
+  return $self->getHeaderItem('OPER_SFT');
+}
+
 =item B<getObsLabel>
 
 Return the observation label (useful for suspending an MSB).
@@ -1115,6 +1126,20 @@ sub setMSBTID {
   $self->setHeaderItem( "MSBTID", $tid, qr/MSBID/);
 }
 
+=item B<setShiftType>
+
+Set the shift type.
+
+=cut
+
+sub setShiftType {
+  my $self = shift;
+  my $type = shift;
+  croak "Shift type is not defined"
+    unless defined $type;
+  $self->setHeaderItem('OPER_SFT', $type);
+}
+
 =back
 
 =head2 Queue compatibility methods
@@ -1140,6 +1165,22 @@ sub msbtid {
     $self->setMSBTID( @_ );
   }
   return $self->getMSBTID;
+}
+
+=item B<shift_type>
+
+Return or set the shift type.
+
+  $seq->shift_type('NIGHT');
+
+=cut
+
+sub shift_type {
+  my $self = shift;
+  if (@_) {
+    $self->setShiftType(@_);
+  }
+  return $self->getShiftType();
 }
 
 =back
